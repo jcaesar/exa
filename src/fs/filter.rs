@@ -2,7 +2,10 @@
 
 use std::cmp::Ordering;
 use std::iter::FromIterator;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "wasi")]
+use std::os::wasi::fs::MetadataExt;
 use std::path::Path;
 
 use crate::fs::DotFilter;

@@ -45,8 +45,6 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "datetime"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0fcb4df22ae812fa2f6d5e3b577247584cc67fce06ad0779168d1dd41cbcce3"
 dependencies = [
  "iso8601",
  "libc",
@@ -54,6 +52,7 @@ dependencies = [
  "num-traits",
  "pad",
  "redox_syscall",
+ "wasi",
  "winapi",
 ]
 
@@ -76,7 +75,8 @@ dependencies = [
  "term_grid",
  "term_size",
  "unicode-width",
- "users",
+ "users 0.11.0",
+ "users 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zoneinfo_compiled",
 ]
 
@@ -298,8 +298,6 @@ checksum = "41cc0f7e4d5d4544e8861606a285bb08d3e70712ccc7d2b84d7c0ccfaf4b05ce"
 [[package]]
 name = "scoped_threadpool"
 version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d51f5df5af43ab3f1360b429fa5e0152ac5ce8c0bd6485cae490332e96846a8"
 
 [[package]]
 name = "term_grid"
@@ -364,6 +362,14 @@ dependencies = [
 [[package]]
 name = "users"
 version = "0.11.0"
+dependencies = [
+ "libc",
+ "log",
+]
+
+[[package]]
+name = "users"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
 dependencies = [
@@ -382,6 +388,12 @@ name = "version_check"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "914b1a6776c4c929a602fafd8bc742e06365d4bcbe48c30f9cca5824f70dc9dd"
+
+[[package]]
+name = "wasi"
+version = "0.10.1+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93c6c3420963c5c64bca373b25e77acb562081b9bb4dd5bb864187742186cea9"
 
 [[package]]
 name = "winapi"

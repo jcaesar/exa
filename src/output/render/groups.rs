@@ -7,7 +7,6 @@ use crate::output::cell::TextCell;
 
 impl f::Group {
     pub fn render<C: Colours, U: Users+Groups>(self, colours: &C, users: &U) -> TextCell {
-        use users::os::unix::GroupExt;
 
         let mut style = colours.not_yours();
 
@@ -17,13 +16,21 @@ impl f::Group {
         };
 
         let current_uid = users.get_current_uid();
-        if let Some(current_user) = users.get_user_by_uid(current_uid) {
+        #[cfg(unix)]
+        {
+            if let Some(current_user) = users.get_user_by_uid(current_uid) {
+                use users::os::unix::GroupExt;
 
-            if current_user.primary_group_id() == group.gid()
-            || group.members().iter().any(|u| u == current_user.name())
-            {
-                style = colours.yours();
+                if current_user.primary_group_id() == group.gid()
+                || group.members().iter().any(|u| u == current_user.name())
+                {
+                    style = colours.yours();
+                }
             }
+        }
+        #[cfg(not(unix))]
+        {
+            style = colours.yours();
         }
 
         TextCell::paint(style, group.name().to_string_lossy().into())

@@ -146,7 +146,10 @@ impl Args {
     pub fn parse<'args, I>(&self, inputs: I, strictness: Strictness) -> Result<Matches<'args>, ParseError>
     where I: IntoIterator<Item = &'args OsStr>
     {
+        #[cfg(unix)]
         use std::os::unix::ffi::OsStrExt;
+        #[cfg(target_os = "wasi")]
+        use std::os::wasi::ffi::OsStrExt;
 
         let mut parsing = true;
 
@@ -499,7 +502,10 @@ impl fmt::Display for ParseError {
 /// Splits a string on its `=` character, returning the two substrings on
 /// either side. Returns `None` if there’s no equals or a string is missing.
 fn split_on_equals(input: &OsStr) -> Option<(&OsStr, &OsStr)> {
-    use std::os::unix::ffi::OsStrExt;
+        #[cfg(unix)]
+        use std::os::unix::ffi::OsStrExt;
+        #[cfg(target_os = "wasi")]
+        use std::os::wasi::ffi::OsStrExt;
 
     if let Some(index) = input.as_bytes().iter().position(|elem| *elem == b'=') {
         let (before, after) = input.as_bytes().split_at(index);

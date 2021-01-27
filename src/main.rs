@@ -21,6 +21,11 @@
 #![allow(clippy::unused_self)]
 #![allow(clippy::wildcard_imports)]
 
+#![cfg_attr(target_os = "wasi", feature(wasi_ext))]
+
+#[cfg(target_os = "wasi")]
+extern crate users_stub as users;
+
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::io::{self, Write, ErrorKind};

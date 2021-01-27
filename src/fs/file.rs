@@ -1,7 +1,10 @@
 //! Files, and methods and fields to access their metadata.
 
 use std::io;
+#[cfg(unix)]
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+#[cfg(target_os = "wasi")]
+use std::os::wasi::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -171,39 +174,15 @@ impl<'dir> File<'dir> {
         self.metadata.is_file()
     }
 
-    /// Whether this file is both a regular file *and* executable for the
-    /// current user. An executable file has a different purpose from an
-    /// executable directory, so they should be highlighted differently.
-    pub fn is_executable_file(&self) -> bool {
-        let bit = modes::USER_EXECUTE;
-        self.is_file() && (self.metadata.permissions().mode() & bit) == bit
-    }
-
     /// Whether this file is a symlink on the filesystem.
     pub fn is_link(&self) -> bool {
         self.metadata.file_type().is_symlink()
-    }
-
-    /// Whether this file is a named pipe on the filesystem.
-    pub fn is_pipe(&self) -> bool {
-        self.metadata.file_type().is_fifo()
-    }
-
-    /// Whether this file is a char device on the filesystem.
-    pub fn is_char_device(&self) -> bool {
-        self.metadata.file_type().is_char_device()
     }
 
     /// Whether this file is a block device on the filesystem.
     pub fn is_block_device(&self) -> bool {
         self.metadata.file_type().is_block_device()
     }
-
-    /// Whether this file is a socket on the filesystem.
-    pub fn is_socket(&self) -> bool {
-        self.metadata.file_type().is_socket()
-    }
-
 
     /// Re-prefixes the path pointed to by this file, if it’s a symlink, to
     /// make it an absolute path that can be accessed from whichever
@@ -284,74 +263,9 @@ impl<'dir> File<'dir> {
         f::Inode(self.metadata.ino())
     }
 
-    /// This file’s number of filesystem blocks.
-    ///
-    /// (Not the size of each block, which we don’t actually report on)
-    pub fn blocks(&self) -> f::Blocks {
-        if self.is_file() || self.is_link() {
-            f::Blocks::Some(self.metadata.blocks())
-        }
-        else {
-            f::Blocks::None
-        }
-    }
-
-    /// The ID of the user that own this file.
-    pub fn user(&self) -> f::User {
-        f::User(self.metadata.uid())
-    }
-
-    /// The ID of the group that owns this file.
-    pub fn group(&self) -> f::Group {
-        f::Group(self.metadata.gid())
-    }
-
-    /// This file’s size, if it’s a regular file.
-    ///
-    /// For directories, no size is given. Although they do have a size on
-    /// some filesystems, I’ve never looked at one of those numbers and gained
-    /// any information from it. So it’s going to be hidden instead.
-    ///
-    /// Block and character devices return their device IDs, because they
-    /// usually just have a file size of zero.
-    pub fn size(&self) -> f::Size {
-        if self.is_directory() {
-            f::Size::None
-        }
-        else if self.is_char_device() || self.is_block_device() {
-            let dev = self.metadata.rdev();
-            f::Size::DeviceIDs(f::DeviceIDs {
-                major: (dev / 256) as u8,
-                minor: (dev % 256) as u8,
-            })
-        }
-        else {
-            f::Size::Some(self.metadata.len())
-        }
-    }
-
     /// This file’s last modified timestamp, if available on this platform.
     pub fn modified_time(&self) -> Option<SystemTime> {
         self.metadata.modified().ok()
-    }
-
-    /// This file’s last changed timestamp, if available on this platform.
-    pub fn changed_time(&self) -> Option<SystemTime> {
-        let (mut sec, mut nanosec) = (self.metadata.ctime(), self.metadata.ctime_nsec());
-
-        if sec < 0 {
-            if nanosec > 0 {
-                sec += 1;
-                nanosec -= 1_000_000_000;
-            }
-
-            let duration = Duration::new(sec.abs() as u64, nanosec.abs() as u32);
-            Some(UNIX_EPOCH - duration)
-        }
-        else {
-            let duration = Duration::new(sec as u64, nanosec as u32);
-            Some(UNIX_EPOCH + duration)
-        }
     }
 
     /// This file’s last accessed timestamp, if available on this platform.
@@ -396,6 +310,115 @@ impl<'dir> File<'dir> {
         }
     }
 
+   
+    /// Whether this file’s extension is any of the strings that get passed in.
+    ///
+    /// This will always return `false` if the file has no extension.
+    pub fn extension_is_one_of(&self, choices: &[&str]) -> bool {
+        match &self.ext {
+            Some(ext)  => choices.contains(&&ext[..]),
+            None       => false,
+        }
+    }
+
+    /// Whether this file’s name, including extension, is any of the strings
+    /// that get passed in.
+    pub fn name_is_one_of(&self, choices: &[&str]) -> bool {
+        choices.contains(&&self.name[..])
+    }
+}
+
+#[cfg(unix)]
+impl<'dir> File<'dir> {
+    /// Whether this file is a named pipe on the filesystem.
+    pub fn is_pipe(&self) -> bool {
+        self.metadata.file_type().is_fifo()
+    }
+
+    /// Whether this file is a char device on the filesystem.
+    pub fn is_char_device(&self) -> bool {
+        self.metadata.file_type().is_char_device()
+    }
+
+
+    /// Whether this file is a socket on the filesystem.
+    pub fn is_socket(&self) -> bool {
+        self.metadata.file_type().is_socket()
+    }
+
+    /// This file’s size, if it’s a regular file.
+    ///
+    /// For directories, no size is given. Although they do have a size on
+    /// some filesystems, I’ve never looked at one of those numbers and gained
+    /// any information from it. So it’s going to be hidden instead.
+    ///
+    /// Block and character devices return their device IDs, because they
+    /// usually just have a file size of zero.
+    pub fn size(&self) -> f::Size {
+        if self.is_directory() {
+            f::Size::None
+        }
+        else if self.is_char_device() || self.is_block_device() {
+            let dev = self.metadata.rdev();
+            f::Size::DeviceIDs(f::DeviceIDs {
+                major: (dev / 256) as u8,
+                minor: (dev % 256) as u8,
+            })
+        }
+        else {
+            f::Size::Some(self.metadata.len())
+        }
+    }
+    
+    /// Whether this file is both a regular file *and* executable for the
+    /// current user. An executable file has a different purpose from an
+    /// executable directory, so they should be highlighted differently.
+    pub fn is_executable_file(&self) -> bool {
+        let bit = modes::USER_EXECUTE;
+        self.is_file() && (self.metadata.permissions().mode() & bit) == bit
+    }
+
+    /// This file’s number of filesystem blocks.
+    ///
+    /// (Not the size of each block, which we don’t actually report on)
+    pub fn blocks(&self) -> f::Blocks {
+        if self.is_file() || self.is_link() {
+            f::Blocks::Some(self.metadata.blocks())
+        }
+        else {
+            f::Blocks::None
+        }
+    }
+
+    /// The ID of the user that own this file.
+    pub fn user(&self) -> f::User {
+        f::User(self.metadata.uid())
+    }
+
+    /// The ID of the group that owns this file.
+    pub fn group(&self) -> f::Group {
+        f::Group(self.metadata.gid())
+    }
+    
+    /// This file’s last changed timestamp, if available on this platform.
+    pub fn changed_time(&self) -> Option<SystemTime> {
+        let (mut sec, mut nanosec) = (self.metadata.ctime(), self.metadata.ctime_nsec());
+
+        if sec < 0 {
+            if nanosec > 0 {
+                sec += 1;
+                nanosec -= 1_000_000_000;
+            }
+
+            let duration = Duration::new(sec.abs() as u64, nanosec.abs() as u32);
+            Some(UNIX_EPOCH - duration)
+        }
+        else {
+            let duration = Duration::new(sec as u64, nanosec as u32);
+            Some(UNIX_EPOCH + duration)
+        }
+    }
+
     /// This file’s permissions, with flags for each bit.
     pub fn permissions(&self) -> f::Permissions {
         let bits = self.metadata.mode();
@@ -419,21 +442,48 @@ impl<'dir> File<'dir> {
             setuid:         has_bit(modes::SETUID),
         }
     }
+}
 
-    /// Whether this file’s extension is any of the strings that get passed in.
-    ///
-    /// This will always return `false` if the file has no extension.
-    pub fn extension_is_one_of(&self, choices: &[&str]) -> bool {
-        match &self.ext {
-            Some(ext)  => choices.contains(&&ext[..]),
-            None       => false,
+#[cfg(target_os = "wasi")]
+impl<'dir> File<'dir> {
+    pub fn is_pipe(&self) -> bool { false }
+    pub fn is_char_device(&self) -> bool { false  }
+    pub fn is_socket(&self) -> bool { false }
+    pub fn is_executable_file(&self) -> bool { false }
+    pub fn blocks(&self) -> f::Blocks { f::Blocks::None }
+    pub fn user(&self) -> f::User { f::User(0) }
+    pub fn group(&self) -> f::Group { f::Group(0) }
+    
+    pub fn changed_time(&self) -> Option<SystemTime> {
+        Some(UNIX_EPOCH + Duration::from_nanos(self.metadata.ctim()))
+    }
+    
+    pub fn size(&self) -> f::Size {
+        if self.is_directory() {
+            f::Size::None
+        } else {
+            f::Size::Some(self.metadata.len())
         }
     }
 
-    /// Whether this file’s name, including extension, is any of the strings
-    /// that get passed in.
-    pub fn name_is_one_of(&self, choices: &[&str]) -> bool {
-        choices.contains(&&self.name[..])
+    pub fn permissions(&self) -> f::Permissions {
+        f::Permissions {
+            user_read:      false,
+            user_write:     false,
+            user_execute:   false,
+
+            group_read:     false,
+            group_write:    false,
+            group_execute:  false,
+
+            other_read:     false,
+            other_write:    false,
+            other_execute:  false,
+
+            sticky:         false,
+            setgid:         false,
+            setuid:         false,
+        }
     }
 }
 
@@ -477,6 +527,7 @@ impl<'dir> FileTarget<'dir> {
 
 /// More readable aliases for the permission bits exposed by libc.
 #[allow(trivial_numeric_casts)]
+#[cfg(unix)]
 mod modes {
 
     // The `libc::mode_t` type’s actual type varies, but the value returned
